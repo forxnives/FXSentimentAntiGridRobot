@@ -602,8 +602,9 @@ import math
 
 def GETALLSYMBOLTRADES (symbol):
     symboltradesjson = None
-
+    _zmq._set_response_()
     _zmq._DWX_MTX_GET_ALL_SYMBOL_TRADES_(symbol)
+    time.sleep(3)
 
     while symboltradesjson is None:
         symboltradesjson = _zmq._get_response_()
@@ -616,7 +617,7 @@ def GETALLSYMBOLTRADES (symbol):
 
 def GETALLTRADES ():
     opentradesjson = None
-
+    _zmq._set_response_()
     _zmq._DWX_MTX_GET_ALL_OPEN_TRADES_()
 
     while opentradesjson is None:
@@ -655,7 +656,7 @@ def PNLhelper(opentradesjson, symboltickets):
 
     pnllist = []
     for eachticket2 in symboltickets:
-        pandl = opentradesjson['_trades'][eachticket2]['_pnl']
+        pandl = opentradesjson[eachticket2]['_pnl']
         pnllist.append(pandl)
 
     return sum(pnllist)
@@ -766,7 +767,7 @@ def PINTERVALS(price, atr, direction):
 
     # declaring pricelist, doing an arithmetic series and appending values to list
     pricelist = []
-    for i in range(1, 8 + 1):
+    for i in range(1, 15 + 1):
         pricelist.append(decformat % price)
         price = price + atr
 
@@ -778,6 +779,7 @@ def PINTERVALS(price, atr, direction):
 
 def GETACCOUNTINFO ():
     accountinfojson = None
+    _zmq._set_response_()
 
     _zmq._DWX_MTX_GET_ACCOUNT_INFORMATION_()
     time.sleep(1)
@@ -796,15 +798,18 @@ def INITIALLOTSIZE(symbol, price, stoploss, riskpercent, accountinfojson):
     # checking if symbol is a yen cross
     JPY_pair = False
 
-    if symbol == 'USDJPY' or 'GBPJPY' or 'EURJPY' or 'CHFJPY' or 'AUDJPY' or 'CADJPY' or 'NZDJPY':
+
+    if (symbol[3:6]) == 'JPY':
         JPY_pair = True
 
     # changing multiplier for yen
     if JPY_pair == True:
         multiplier = 0.01
+        multiplier2 = 0.00001
 
     else:
         multiplier = 0.0001
+        multiplier2 = 0.0000001
 
     # determining calculation method based on USD account currency
 
@@ -838,9 +843,13 @@ def INITIALLOTSIZE(symbol, price, stoploss, riskpercent, accountinfojson):
 
     # calculating units depending on method
     if method == 1:
-        # pip_value = pip_value * price
-        units = pip_value / multiplier
-        units = units * 0.0000001
+        if (symbol[:3]) == 'XAU':
+            units = pip_value / multiplier
+            units = units * 0.0001
+        else:
+            # pip_value = pip_value * price
+            units = pip_value / multiplier
+            units = units * 0.0000001
 
 
     elif method == 2:
@@ -851,13 +860,14 @@ def INITIALLOTSIZE(symbol, price, stoploss, riskpercent, accountinfojson):
 
     else:  # is method 0
         units = pip_value / multiplier
-        units = units * 0.0000001
+        units = units * multiplier2
 
     # implementing logic for rounding up..only rounds up lotsize from 8 instead of 5.
     units = str(units)
     lotsize = 1
     if int(units[4]) > 7:
         lotsize = ('%.2f' % float(units))
+        lotsize = float(lotsize)
 
     else:
         lotsize = truncate(float(units), 2)
@@ -868,29 +878,52 @@ def INITIALLOTSIZE(symbol, price, stoploss, riskpercent, accountinfojson):
 ##########################################################################
 #CALCULATES SLPOINTS
 
-def SLPOINTCALC(price, slprice):
+def SLPOINTCALC(price, slprice, decplaces1):
     multiplier = 1
     slpoints = (float(price) - float(slprice))
     if slpoints > 0:
         multiplier = -1
 
-    decplaces1 = DECPLACES(price)
+    # decplaces1 = DECPLACES(price)
     decplaces2 = DECPLACES(slpoints)
 
+    tempslpoints = abs(slpoints)
+
+    tempslpoints = str(tempslpoints)
+    slstrlength = len(tempslpoints)
+    slpredecimalplaces = slstrlength - decplaces2
+    slpredecimalplaces = slpredecimalplaces - 1
+
+    if slpredecimalplaces == 1:
+        if tempslpoints[0] == '0':
+            slpredecimalplaces = 0
+
+    slpointquotient = 10 ** slpredecimalplaces
+    slpoints = float(slpoints)
+
+    slpoints = slpoints / slpointquotient
+
+    decplaces2 = DECPLACES(slpoints)
 
     sldifference = abs(decplaces2 - decplaces1)
 
-
     slpoints = str(slpoints)
+
     points = slpoints[-1 * (decplaces2):-1 * (sldifference)]
-    slpoints = float(points)*multiplier
+
+    slpoints = float(points)
+    slpoints = (slpoints * slpointquotient) * multiplier
+
+    # slpoints = float(points)*multiplier
     return slpoints
 
 
 ##########################################################################
+
+
 #SENDS TRADE GRID DEPENDING ON LEVEL/STATE
 
-def TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr):
+def TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr, decplaces1):
 
     # determining order type (buy stop or sell stop)
     if direction == 'long':
@@ -904,10 +937,39 @@ def TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, at
     firstprice = pricelist[0]
     tpprice = pricelist[3]
 
+
     slpoints = abs(float(firstprice) - float(stoploss))
     tppoints = abs(float(firstprice) - float(tpprice))
 
-    decplaces1 = DECPLACES(firstprice)
+    # decplaces1 = DECPLACES(firstprice)
+    decplaces2 = DECPLACES(slpoints)
+    decplaces3 = DECPLACES(tppoints)
+
+    tppoints = str(tppoints)
+    tpstrlength = len(tppoints)
+    slpoints = str(slpoints)
+    slstrlength = len(slpoints)
+
+    slpredecimalplaces = slstrlength - decplaces2
+    slpredecimalplaces = slpredecimalplaces - 1
+
+    tppredecimalplaces = tpstrlength - decplaces3
+    tppredecimalplaces = tppredecimalplaces - 1
+
+    if slpredecimalplaces == 1:
+        if slpoints[0] == '0':
+            slpredecimalplaces = 0
+
+    if tppredecimalplaces == 1:
+        if tppoints[0] == '0':
+            tppredecimalplaces = 0
+
+    tppointquotient = 10 ** tppredecimalplaces
+    tppoints = float(tppoints) / tppointquotient
+
+    slpointquotient = 10 ** slpredecimalplaces
+    slpoints = float(slpoints) / slpointquotient
+
     decplaces2 = DECPLACES(slpoints)
     decplaces3 = DECPLACES(tppoints)
 
@@ -915,13 +977,18 @@ def TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, at
     tpdifference = abs(decplaces3 - decplaces1)
 
     slpoints = str(slpoints)
+
     points = slpoints[-1 * (decplaces2):-1 * (sldifference)]
+
     slpoints = int(points)
+    slpoints = slpoints * slpointquotient
 
     tppoints = str(tppoints)
     points2 = tppoints[-1 * (decplaces3):-1 * (tpdifference)]
 
     tppoints = float(points2)
+
+    tppoints = tppoints * tppointquotient
 
     # splitting the pricelist in two..the first for scaling in lotsize (LEVEL 1) and the second for fixed lotsize (LEVEL 2)
 
@@ -1004,7 +1071,7 @@ def DELETEALLPENDINGS(symbol):
 ##########################################################################
 # MAIN STRATEGY EXECUTION FUNCTION
 
-def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, direction, lotsize1, stoploss, level, pnl, atr):
+def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, direction, lotsize1, stoploss, level, pnl, atr, decplaces):
 
 
     # declaring commentstring for deletion of orders later
@@ -1019,7 +1086,7 @@ def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, 
     if level == 0:
         DELETEALLPENDINGS(symbol)
         time.sleep(2)
-        TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr)
+        TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr, decplaces)
 
     elif level == 1:
 
@@ -1027,7 +1094,7 @@ def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, 
         time.sleep(2)
         DELETEALLPENDINGS(symbol)
         time.sleep(2)
-        TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr)
+        TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr, decplaces)
 
     elif level == 2:
         if pnl < 0:
@@ -1036,7 +1103,7 @@ def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, 
             time.sleep(2)
             DELETEALLPENDINGS(symbol)
             time.sleep(2)
-            TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr)
+            TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr, decplaces)
 
         else:
 
@@ -1047,9 +1114,10 @@ def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, 
 
             # updating symbol json and ticketlist
 
-            symboltradesjson = GETALLSYMBOLTRADES(symbol)
-            time.sleep(1)
-            symboltickets = SYMBOLTICKETS(symboltradesjson, symbol)
+            newsymboltradesjson = GETALLSYMBOLTRADES(symbol)
+            time.sleep(2)
+            # print(newsymboltradesjson)
+            symboltickets = SYMBOLTICKETS(newsymboltradesjson, symbol)
             time.sleep(1)
 
             # setting stoplosses of existing position to level 1 tp of new position
@@ -1057,13 +1125,13 @@ def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, 
 
             for eachticket in symboltickets:
 
-                curr_price = symboltradesjson['_trades'][eachticket]['_open_price']
-                slpoints = SLPOINTCALC(curr_price, newslprice)
+                curr_price = symboltradesjson[eachticket]['_open_price']
+                slpoints = SLPOINTCALC(curr_price, newslprice, decplaces)
                 _zmq._DWX_MTX_MODIFY_TRADE_BY_TICKET_(eachticket, slpoints, 10000)
                 time.sleep(1)
 
 
-            TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr)
+            TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr, decplaces)
 
     elif level == 3:
         DELETEALLPENDINGS(symbol)
@@ -1077,6 +1145,7 @@ def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, 
                 time.sleep(1)
 
         symboltradesjson = GETALLSYMBOLTRADES(symbol)
+        # RAWSYMBOLJSON = GETALLSYMBOLTRADES(SYMBOL)
         time.sleep(1)
         symboltickets = SYMBOLTICKETS(symboltradesjson, symbol)
         time.sleep(1)
@@ -1085,10 +1154,10 @@ def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, 
         for eachticket in symboltickets:
 
             curr_price = symboltradesjson['_trades'][eachticket]['_open_price']
-            slpoints = SLPOINTCALC(curr_price, stoploss)
+            slpoints = SLPOINTCALC(curr_price, stoploss, decplaces)
             _zmq._DWX_MTX_MODIFY_TRADE_BY_TICKET_(eachticket, slpoints, 10000)
 
-        TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr)
+        TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr, decplaces)
 
     elif level == 4:
         pnllist = []
@@ -1106,7 +1175,7 @@ def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, 
             DELETEALLPENDINGS(symbol)
             time.sleep(2)
 
-            TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr)
+            TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr, decplaces)
 
         else:
 
@@ -1124,11 +1193,11 @@ def TRADELOGICMODULE(symbol, symboltradesjson, symboltickets, pricelist, magic, 
             for eachticket in symboltickets:
 
                 curr_price = symboltradesjson['_trades'][eachticket]['_open_price']
-                slpoints = SLPOINTCALC(curr_price, newslprice)
+                slpoints = SLPOINTCALC(curr_price, newslprice, decplaces)
                 _zmq._DWX_MTX_MODIFY_TRADE_BY_TICKET_(eachticket, slpoints, 10000)
                 time.sleep(1)
 
-            TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr)
+            TRADELOOP(symbol, pricelist, lotsize1, stoploss, direction, magic, level, atr, decplaces)
 
 
 ##########################################################################
@@ -1142,11 +1211,16 @@ def INIT():
     # PERCENT = input('total risk percent')
 
     #                        (skipping questionnaire for expedited testing rn, might have to do some formatting)
-    SYMBOL = 'AUDUSD'
-    PRICE = '0.69620'       #made price and stoploss strings to avoid losing potential trailing 0s with float.
-    STOPLOSS = '0.70857'
-    ATR = 15            # tried  to auto-import ATR in a few ways, including putting the indicator in the EA code but I didn't know what I was doing lol. must be possible though.
+    SYMBOL = 'XAUUSD'
+    PRICE = '1407.48'       #made price and stoploss strings to avoid losing potential trailing 0s with float.
+    STOPLOSS = '1432.76'
+    ATR = 66            # tried  to auto-import ATR in a few ways, including putting the indicator in the EA code but I didn't know what I was doing lol. must be possible though.
     PERCENT = 2         #(percent per symbol)
+
+    #storing decimal places for later to avoid losing trailing 0.
+    DECPLACES = decimal.Decimal(PRICE)
+    DECPLACES = abs(DECPLACES.as_tuple().exponent)
+
 
     # getting direction
     DIRECTION = ''
@@ -1182,8 +1256,7 @@ def INIT():
         MAGIC = 8
     elif SYMBOL =='NZDUSD':
         MAGIC = 9
-
-    elif SYMBOL =='XAUUSD':          # going to have to rework the code a little bit for gold..getting a SL/TP-related error
+    elif SYMBOL =='XAUUSD':
         MAGIC = 10
     else:
         MAGIC = 11
@@ -1193,6 +1266,8 @@ def INIT():
 
     # creating symbol json dictionary for existing position
     RAWSYMBOLJSON = GETALLSYMBOLTRADES(SYMBOL)
+
+
 
     # creating ticketlist for existing position
     SYMBTICKETS = SYMBOLTICKETS(RAWSYMBOLJSON, SYMBOL)
@@ -1205,16 +1280,17 @@ def INIT():
 
     # calculating starting lotsize for new order
     LOTSIZE1 = INITIALLOTSIZE(SYMBOL, float(PRICE), float(STOPLOSS), PERCENT, ACCOUNTINFOJSON)
+    print(LOTSIZE1)
 
     # calculating existing position's pnl
     PNL = PNLhelper(SYMBOLTRADESJSON, SYMBTICKETS)
 
     # detecting level/state of existing position
-    LEVELDETECT(SYMBOL, SYMBTICKETS, SYMBOLTRADESJSON)
+    LEVEL = LEVELDETECT(SYMBOL, SYMBTICKETS, SYMBOLTRADESJSON)
+    print(LEVEL)
 
     # plugging everything into main strategy function
-    TRADELOGICMODULE(SYMBOL, SYMBOLTRADESJSON, SYMBTICKETS, PRICELIST, MAGIC, DIRECTION, LOTSIZE1, float(STOPLOSS),
-                         LEVEL, PNL, ATR)
+    TRADELOGICMODULE(SYMBOL, SYMBOLTRADESJSON, SYMBTICKETS, PRICELIST, MAGIC, DIRECTION, LOTSIZE1, float(STOPLOSS), LEVEL, PNL, ATR, DECPLACES)
 
 INIT()
 
