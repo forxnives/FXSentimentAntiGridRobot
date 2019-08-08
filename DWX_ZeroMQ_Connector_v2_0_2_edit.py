@@ -14,7 +14,7 @@
     https://opensource.org/licenses/BSD-3-Clause
 """
 
-# IMPORT zmq library
+# IMPORT zmq librarya
 # import zmq, time
 import zmq
 from time import sleep
@@ -307,16 +307,15 @@ class DWX_ZeroMQ_Connector():
         try:
 
             # _msg = "{};{}".format('ACCOUNT', 0)
-            #_msg = "{}".format('ACCOUNT')
+            # _msg = "{}".format('ACCOUNT')
             _msg = 'ACCOUNT'
             # self.remote_send(self._PUSH_SOCKET, _msg)
-            #_msg = "{}".format('ACCOUNT')
+            # _msg = "{}".format('ACCOUNT')
 
             self.remote_send(self._PUSH_SOCKET, _msg)
 
         except KeyError:
             pass
-
 
     # DEFAULT ORDER DICT
     def _generate_default_order_dict(self):
@@ -364,6 +363,22 @@ class DWX_ZeroMQ_Connector():
                                        _timeframe,
                                        _start,
                                        _end)
+        # Send via PUSH Socket
+        self.remote_send(self._PUSH_SOCKET, _msg)
+
+    ##########################################################################
+
+    def _DWX_MTX_ATR_REQUEST_(self, _symbol='EURUSD'):
+
+        _msg = "{};{}".format('ATR', _symbol)
+        # Send via PUSH Socket
+        self.remote_send(self._PUSH_SOCKET, _msg)
+
+    ##########################################################################
+
+    def _DWX_MTX_PRICE_REQUEST_(self, _symbol='EURUSD'):
+
+        _msg = "{};{}".format('RATES', _symbol)
         # Send via PUSH Socket
         self.remote_send(self._PUSH_SOCKET, _msg)
 
@@ -439,10 +454,10 @@ class DWX_ZeroMQ_Connector():
          compArray[1] = ACTION (e.g. OPEN, MODIFY, CLOSE)
          compArray[2] = TYPE (e.g. OP_BUY, OP_SELL, etc - only used when ACTION=OPEN)
 
-         For compArray[0] == DATA, format is: 
+         For compArray[0] == DATA, format is:
              DATA|SYMBOL|TIMEFRAME|START_DATETIME|END_DATETIME
 
-         // ORDER TYPES: 
+         // ORDER TYPES:
          // https://docs.mql4.com/constants/tradingconstants/orderproperties
 
          // OP_BUY = 0
@@ -536,8 +551,8 @@ class DWX_ZeroMQ_Connector():
                             if _symbol not in self._Market_Data_DB.keys():
                                 self._Market_Data_DB[_symbol] = {}
                             self._Market_Data_DB[_symbol][_timestamp] = (
-                            int(_time), float(_open), float(_high), float(_low), float(_close), int(_tick_vol),
-                            int(_spread), int(_real_vol))
+                                int(_time), float(_open), float(_high), float(_low), float(_close), int(_tick_vol),
+                                int(_spread), int(_real_vol))
                         # invokes data handlers on sub port
                         for hnd in self._subdata_handlers:
                             hnd.onSubData(msg)
@@ -585,3 +600,6 @@ class DWX_ZeroMQ_Connector():
         self._MarketData_Thread = None
 
     ##########################################################################
+
+
+########################END OF DARWINEX SCRIPT############################
